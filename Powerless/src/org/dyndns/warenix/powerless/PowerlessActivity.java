@@ -1,5 +1,8 @@
 package org.dyndns.warenix.powerless;
 
+import android.app.Notification;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
 import android.app.admin.DeviceAdminReceiver;
 import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
@@ -26,6 +29,9 @@ public class PowerlessActivity extends ActionBarActivity implements
 
 	private static final String TAG = "PowerlessActivity";
 
+	public static final String EXTRA_ACTION = "action";
+	public static final String ACTION_LOCK_SCREEN = "lock_screen";
+
 	PowerManager mPm;
 
 	/** Called when the activity is first created. */
@@ -39,8 +45,27 @@ public class PowerlessActivity extends ActionBarActivity implements
 			onInitError("cannot init Power Manager");
 			return;
 		}
-
 		setupUI();
+		showNotification();
+	}
+
+	public void onResume() {
+		super.onResume();
+
+		if (parseAction()) {
+			finish();
+		}
+	}
+
+	protected boolean parseAction() {
+		Bundle extras = getIntent().getExtras();
+		if (extras != null) {
+			if (ACTION_LOCK_SCREEN.equals(extras.getString(EXTRA_ACTION))) {
+				onLockscreenClicked(null);
+				return true;
+			}
+		}
+		return false;
 	}
 
 	private void onInitError(String message) {
@@ -113,6 +138,36 @@ public class PowerlessActivity extends ActionBarActivity implements
 		} catch (Exception ex) {
 			Log.i(TAG, "Could not reboot", ex);
 		}
+	}
+
+	private NotificationManager mNotificationManager;
+	private int SIMPLE_NOTFICATION_ID = 1;
+	private Notification notifyDetails;
+
+	public void showNotification() {
+		Context context = getApplicationContext();
+		CharSequence contentTitle = "Powerless";
+		CharSequence contentText = "Tape me to lock screen now.";
+		Intent notifyIntent = new Intent(this, PowerlessActivity.class);
+		notifyIntent.putExtra(EXTRA_ACTION, ACTION_LOCK_SCREEN);
+		PendingIntent intent = PendingIntent.getActivity(this, 0, notifyIntent,
+				android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+
+		if (mNotificationManager == null) {
+			String ns = Context.NOTIFICATION_SERVICE;
+			mNotificationManager = (NotificationManager) getSystemService(ns);
+		}
+		if (notifyDetails == null) {
+			int icon = R.drawable.ic_launcher;
+			CharSequence tickerText = "Powerless is running.";
+			long when = System.currentTimeMillis();
+
+			notifyDetails = new Notification(icon, tickerText, when);
+		}
+		notifyDetails.setLatestEventInfo(context, contentTitle, contentText,
+				intent);
+		mNotificationManager.notify(SIMPLE_NOTFICATION_ID, notifyDetails);
+
 	}
 
 	public static class MyDeviceAdminReceiver extends DeviceAdminReceiver {
