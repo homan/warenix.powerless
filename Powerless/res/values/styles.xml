@@ -6,7 +6,7 @@
         <item name="android:textColor">#ffffff</item>
         <item name="android:padding">10dip</item>
         <item name="android:layout_marginTop">20dip</item>
-        <item name="android:background">@drawable/btn_red</item>
+        <!-- <item name="android:background">@drawable/btn_red</item> -->
     </style>
 
 </resources>
