@@ -41,4 +41,16 @@
         android:layout_height="wrap_content"
         android:text="Lock Screen" />
 
+    <Button
+        android:id="@+id/take_screenshot"
+        style="@style/myText"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="Take screenshot" />
+
+    <ImageView
+        android:id="@+id/screenshot"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content" />
+
 </LinearLayout>

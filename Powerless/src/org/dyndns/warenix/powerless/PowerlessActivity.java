@@ -1,5 +1,9 @@
 package org.dyndns.warenix.powerless;
 
+import java.io.File;
+
+import org.dyndns.warenix.abs.activity.SimpleABSActionbarActivity;
+
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -8,15 +12,19 @@ import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.hardware.Sensor;
+import android.hardware.SensorEvent;
+import android.hardware.SensorEventListener;
+import android.hardware.SensorManager;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.PowerManager;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Toast;
-
-import com.example.android.actionbarcompat.ActionBarActivity;
 
 /**
  * Perform functions of a hardware power button.
@@ -24,7 +32,7 @@ import com.example.android.actionbarcompat.ActionBarActivity;
  * @author warenix
  * 
  */
-public class PowerlessActivity extends ActionBarActivity implements
+public class PowerlessActivity extends SimpleABSActionbarActivity implements
 		OnClickListener {
 
 	private static final String TAG = "PowerlessActivity";
@@ -49,12 +57,22 @@ public class PowerlessActivity extends ActionBarActivity implements
 		showNotification();
 	}
 
+	ImageView screenshot;
+
 	public void onResume() {
 		super.onResume();
 
 		if (parseAction()) {
 			finish();
+		} else {
+			previewScreenshot();
 		}
+	}
+
+	private void previewScreenshot() {
+		Log.d(TAG, "set preview screenshot");
+		screenshot.setImageBitmap(null);
+		screenshot.setImageURI(Uri.fromFile(new File(getScreenshotFile())));
 	}
 
 	protected boolean parseAction() {
@@ -73,9 +91,11 @@ public class PowerlessActivity extends ActionBarActivity implements
 	}
 
 	protected void setupUI() {
+		screenshot = (ImageView) findViewById(R.id.screenshot);
+
 		int[] buttonIds = new int[] { R.id.recovery,
 				// R.id.fastboot,
-				R.id.reboot, R.id.lock_screen };
+				R.id.reboot, R.id.lock_screen, R.id.take_screenshot };
 		for (int id : buttonIds) {
 			((Button) this.findViewById(id)).setOnClickListener(this);
 		}
@@ -96,6 +116,9 @@ public class PowerlessActivity extends ActionBarActivity implements
 		// break;
 		case R.id.lock_screen:
 			onLockscreenClicked(view);
+			break;
+		case R.id.take_screenshot:
+			onTakeScreenshotClicked(view);
 			break;
 		}
 	}
@@ -128,6 +151,77 @@ public class PowerlessActivity extends ActionBarActivity implements
 			finish();
 		}
 
+	}
+
+	private void onTakeScreenshotClicked(View v) {
+		startProximitySensor();
+	}
+
+	SensorManager mSensorManager;
+	Sensor mProximitySensor;
+	boolean mIsProximityStarted;
+
+	private void startProximitySensor() {
+		getApplicationContext();
+		mSensorManager = (SensorManager) getSystemService(Context.SENSOR_SERVICE);
+		mProximitySensor = mSensorManager
+				.getDefaultSensor(Sensor.TYPE_PROXIMITY);
+		if (mProximitySensor == null) {
+			Log.i(TAG, "No proximity sensor found!");
+		} else {
+			mIsProximityStarted = true;
+			Log.i(TAG, "Proximity started");
+			mSensorManager.registerListener(proximitySensorEventListener,
+					mProximitySensor, SensorManager.SENSOR_DELAY_UI);
+		}
+	}
+
+	private SensorEventListener proximitySensorEventListener = new SensorEventListener() {
+
+		static final int SENSOR_COVERED = 0;
+
+		@Override
+		public void onSensorChanged(SensorEvent event) {
+			if (Sensor.TYPE_PROXIMITY == event.sensor.getType()) {
+				Log.i(TAG,
+						"Proximity Sensor Reading: "
+								+ String.valueOf(event.values[0]));
+
+				if (SENSOR_COVERED == event.values[0]) {
+					if (mIsProximityStarted) {
+						mIsProximityStarted = false;
+						mSensorManager.unregisterListener(this);
+					}
+
+					takeScreenshot();
+				}
+			}
+
+		}
+
+		@Override
+		public void onAccuracyChanged(Sensor sensor, int accuracy) {
+
+		}
+	};
+
+	private void takeScreenshot() {
+		String screenshotFullPath = getScreenshotFile();
+		String command = String.format(
+				"sleep 3 && /system/bin/screencap -p %s", screenshotFullPath);
+
+		runCommandAsRoot(command);
+		Toast.makeText(this, "Captured", Toast.LENGTH_SHORT).show();
+		Log.d(TAG, "Captured");
+
+		previewScreenshot();
+	}
+
+	String getScreenshotFile() {
+		File cacheDir = this.getCacheDir();
+		String screenshotfullPath = String.format("%s/%s",
+				cacheDir.getAbsoluteFile(), "screenshot.png");
+		return screenshotfullPath;
 	}
 
 	protected void runCommandAsRoot(String command) {
