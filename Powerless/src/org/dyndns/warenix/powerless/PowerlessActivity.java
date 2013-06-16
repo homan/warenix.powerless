@@ -2,8 +2,6 @@ package org.dyndns.warenix.powerless;
 
 import java.io.File;
 
-import org.dyndns.warenix.abs.activity.SimpleABSActionbarActivity;
-
 import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
@@ -19,6 +17,7 @@ import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.PowerManager;
+import android.support.v4.app.FragmentActivity;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -32,7 +31,7 @@ import android.widget.Toast;
  * @author warenix
  * 
  */
-public class PowerlessActivity extends SimpleABSActionbarActivity implements
+public class PowerlessActivity extends FragmentActivity implements
 		OnClickListener {
 
 	private static final String TAG = "PowerlessActivity";
@@ -218,7 +217,7 @@ public class PowerlessActivity extends SimpleABSActionbarActivity implements
 	}
 
 	String getScreenshotFile() {
-		File cacheDir = this.getCacheDir();
+		File cacheDir = this.getExternalCacheDir();
 		String screenshotfullPath = String.format("%s/%s",
 				cacheDir.getAbsoluteFile(), "screenshot.png");
 		return screenshotfullPath;
