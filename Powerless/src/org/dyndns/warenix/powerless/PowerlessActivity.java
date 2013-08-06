@@ -1,6 +1,9 @@
 package org.dyndns.warenix.powerless;
 
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 import android.app.Notification;
 import android.app.NotificationManager;
@@ -10,12 +13,17 @@ import android.app.admin.DevicePolicyManager;
 import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Message;
 import android.os.PowerManager;
 import android.support.v4.app.FragmentActivity;
 import android.util.Log;
@@ -71,7 +79,8 @@ public class PowerlessActivity extends FragmentActivity implements
 	private void previewScreenshot() {
 		Log.d(TAG, "set preview screenshot");
 		screenshot.setImageBitmap(null);
-		screenshot.setImageURI(Uri.fromFile(new File(getScreenshotFile())));
+		screenshot.setImageURI(Uri.fromFile(new File(
+				getScreenshotFile("screenshot.png"))));
 	}
 
 	protected boolean parseAction() {
@@ -91,6 +100,7 @@ public class PowerlessActivity extends FragmentActivity implements
 
 	protected void setupUI() {
 		screenshot = (ImageView) findViewById(R.id.screenshot);
+		screenshot.setOnClickListener(this);
 
 		int[] buttonIds = new int[] { R.id.recovery,
 				// R.id.fastboot,
@@ -98,7 +108,9 @@ public class PowerlessActivity extends FragmentActivity implements
 		for (int id : buttonIds) {
 			((Button) this.findViewById(id)).setOnClickListener(this);
 		}
-
+		if (getTakeScreenshotRunnable() == null) {
+			findViewById(R.id.take_screenshot).setEnabled(false);
+		}
 	}
 
 	@Override
@@ -119,7 +131,19 @@ public class PowerlessActivity extends FragmentActivity implements
 		case R.id.take_screenshot:
 			onTakeScreenshotClicked(view);
 			break;
+		case R.id.screenshot:
+			shareScreenshot();
+			break;
 		}
+	}
+
+	private void shareScreenshot() {
+		Intent share = new Intent(Intent.ACTION_SEND);
+		share.setType("image/jpeg");
+		share.addFlags(Intent.FLAG_ACTIVITY_CLEAR_WHEN_TASK_RESET);
+		Uri uri = Uri.fromFile(new File(getScreenshotFile("screenshot.png")));
+		share.putExtra(Intent.EXTRA_STREAM, uri);
+		startActivity(share);
 	}
 
 	private void onRebootClicked(View v) {
@@ -205,21 +229,84 @@ public class PowerlessActivity extends FragmentActivity implements
 	};
 
 	private void takeScreenshot() {
-		String screenshotFullPath = getScreenshotFile();
-		String command = String.format(
-				"sleep 3 && /system/bin/screencap -p %s", screenshotFullPath);
-
-		runCommandAsRoot(command);
-		Toast.makeText(this, "Captured", Toast.LENGTH_SHORT).show();
-		Log.d(TAG, "Captured");
-
-		previewScreenshot();
+		Runnable r = getTakeScreenshotRunnable();
+		new Thread(r).start();
 	}
 
-	String getScreenshotFile() {
+	private Handler mUIHandler = new Handler() {
+		public void handleMessage(Message msg) {
+			switch (msg.what) {
+			case 0:
+				Toast.makeText(PowerlessActivity.this, "Captured",
+						Toast.LENGTH_SHORT).show();
+			case 1:
+				previewScreenshot();
+				break;
+			}
+
+		}
+	};
+
+	private Runnable getTakeScreenshotRunnable() {
+		File f = new File("/system/bin/screencap");
+		if (f.exists()) {
+			return new Runnable() {
+				public void run() {
+
+					String screenshotFullPath = getScreenshotFile("screenshot.png");
+					String command = String.format(
+							"sleep 3 && /system/bin/screencap -p %s",
+							screenshotFullPath);
+
+					runCommandAsRoot(command);
+					mUIHandler.sendEmptyMessage(0);
+					Log.d(TAG, "Captured");
+				}
+			};
+		} else {
+			f = new File("/system/bin/screenshot");
+			if (f.exists()) {
+				return new Runnable() {
+					public void run() {
+
+						String command = String
+								.format("sleep 3 && /system/bin/screenshot");
+						runCommandAsRoot(command);
+
+						String screenshotFullPath = String.format("%s/%s",
+								Environment.getExternalStorageDirectory()
+										.toString(), "tmpshot.bmp");
+						Bitmap bitmap = BitmapFactory
+								.decodeFile(screenshotFullPath);
+						if (bitmap != null) {
+							try {
+								FileOutputStream out = new FileOutputStream(
+										getScreenshotFile("screenshot.png"));
+								bitmap.compress(Bitmap.CompressFormat.PNG, 100,
+										out);
+								out.flush();
+								out.close();
+							} catch (FileNotFoundException e) {
+								e.printStackTrace();
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						}
+
+						mUIHandler.sendEmptyMessage(0);
+						Log.d(TAG, "Captured");
+					}
+				};
+			}
+		}
+
+		return null;
+	}
+
+	String getScreenshotFile(String filename) {
 		File cacheDir = this.getExternalCacheDir();
 		String screenshotfullPath = String.format("%s/%s",
-				cacheDir.getAbsoluteFile(), "screenshot.png");
+				cacheDir.getAbsoluteFile(), filename);
 		return screenshotfullPath;
 	}
 
@@ -241,7 +328,7 @@ public class PowerlessActivity extends FragmentActivity implements
 		Context context = getApplicationContext();
 		CharSequence contentTitle = "Powerless";
 		CharSequence contentText = "Tape me to lock screen now.";
-		Intent notifyIntent = new Intent(this, PowerlessActivity.class);
+		Intent notifyIntent = new Intent(this, InvisibleActivity.class);
 		notifyIntent.putExtra(EXTRA_ACTION, ACTION_LOCK_SCREEN);
 		PendingIntent intent = PendingIntent.getActivity(this, 0, notifyIntent,
 				android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
